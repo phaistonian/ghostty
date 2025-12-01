@@ -54,6 +54,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
     /// The configuration derived from the Ghostty config so we don't need to rely on references.
     private(set) var derivedConfig: DerivedConfig
 
+    /// The accent color that should be rendered for this tab.
+    var tabColor: TerminalWindow.TabColor = .none {
+        didSet {
+            guard tabColor != oldValue else { return }
+            if let terminalWindow = window as? TerminalWindow {
+                terminalWindow.display(tabColor: tabColor)
+            }
+            window?.invalidateRestorableState()
+        }
+    }
+
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
@@ -860,12 +871,14 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         let focusedSurface: UUID?
         let tabIndex: Int?
         weak var tabGroup: NSWindowTabGroup?
+        let tabColor: TerminalWindow.TabColor
     }
 
     convenience init(_ ghostty: Ghostty.App,
          with undoState: UndoState
     ) {
         self.init(ghostty, withSurfaceTree: undoState.surfaceTree)
+        self.tabColor = undoState.tabColor
 
         // Show the window and restore its frame
         showWindow(nil)
@@ -906,7 +919,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             surfaceTree: surfaceTree,
             focusedSurface: focusedSurface?.id,
             tabIndex: window.tabGroup?.windows.firstIndex(of: window),
-            tabGroup: window.tabGroup)
+            tabGroup: window.tabGroup,
+            tabColor: tabColor)
     }
 
     //MARK: - NSWindowController
@@ -947,7 +961,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             viewModel: self,
             delegate: self,
         ))
-        
+
+        if let terminalWindow = window as? TerminalWindow {
+            terminalWindow.display(tabColor: tabColor)
+        }
         // If we have a default size, we want to apply it.
         if let defaultSize {
             switch (defaultSize) {
@@ -1184,6 +1201,10 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         ) {
             self.closeTabsOnTheRightImmediately()
         }
+    }
+
+    func setTabColor(_ color: TerminalWindow.TabColor) {
+        tabColor = color
     }
 
     @IBAction func returnToDefaultSize(_ sender: Any?) {
