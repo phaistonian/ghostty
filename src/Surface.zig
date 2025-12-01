@@ -5286,6 +5286,7 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             switch (v) {
                 .this => .this,
                 .other => .other,
+                .right => .right,
             },
         ),
 
