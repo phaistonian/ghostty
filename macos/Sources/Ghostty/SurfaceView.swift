@@ -234,6 +234,10 @@ extension Ghostty {
                             .opacity(overlayOpacity)
                     }
                 }
+
+                SurfaceFocusHighlightOverlay(color: .accentColor)
+                    .opacity(surfaceView.didFlashHighlight ? 1 : 0)
+                    .animation(.easeOut(duration: 0.25), value: surfaceView.didFlashHighlight)
             }
         }
     }
@@ -584,6 +588,21 @@ extension Ghostty {
                     return Color.clear
                 }
             }
+        }
+    }
+
+    struct SurfaceFocusHighlightOverlay: View {
+        let color: Color
+
+        var body: some View {
+            Rectangle()
+                .fill(color.opacity(0.22))
+                .overlay(
+                    Rectangle()
+                        .stroke(color.opacity(0.65), lineWidth: 2)
+                )
+                .blendMode(.plusLighter)
+                .allowsHitTesting(false)
         }
     }
 

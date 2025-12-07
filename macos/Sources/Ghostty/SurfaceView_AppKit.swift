@@ -105,6 +105,7 @@ extension Ghostty {
         // The time this surface last became focused. This is a ContinuousClock.Instant
         // on supported platforms.
         @Published var focusInstant: ContinuousClock.Instant? = nil
+        @Published private(set) var didFlashHighlight: Bool = false
 
         // Returns sizing information for the surface. This is the raw C
         // structure because I'm lazy.
@@ -225,6 +226,9 @@ extension Ghostty {
 
         /// Event monitor (see individual events for why)
         private var eventMonitor: Any? = nil
+
+        /// Task managing the pane highlight animation lifecycle.
+        private var flashHighlightTask: Task<Void, Never>? = nil
 
         // We need to support being a first responder so that we can get input events
         override var acceptsFirstResponder: Bool { return true }
@@ -398,6 +402,8 @@ extension Ghostty {
         }
 
         deinit {
+            flashHighlightTask?.cancel()
+
             // Remove all of our notificationcenter subscriptions
             let center = NotificationCenter.default
             center.removeObserver(self)
@@ -1608,6 +1614,30 @@ extension Ghostty {
             if focus {
                 self.window?.makeKeyAndOrderFront(self)
                 Ghostty.moveFocus(to: self)
+            }
+        }
+
+        /// Triggers a subtle flash overlay on the pane contents.
+        @MainActor
+        func flashContentHighlight(
+            delay: Duration = .milliseconds(80),
+            duration: Duration = .milliseconds(260)
+        ) {
+            flashHighlightTask?.cancel()
+            flashHighlightTask = Task { [weak self] in
+                if delay > .zero {
+                    try? await Task.sleep(for: delay)
+                }
+
+                guard let self else { return }
+                self.didFlashHighlight = true
+
+                if duration > .zero {
+                    try? await Task.sleep(for: duration)
+                }
+
+                guard !Task.isCancelled else { return }
+                self.didFlashHighlight = false
             }
         }
 

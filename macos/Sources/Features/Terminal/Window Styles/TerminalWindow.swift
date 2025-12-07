@@ -268,6 +268,36 @@ class TerminalWindow: NSWindow {
         (tabbedWindows?.count ?? 0) > 1
     }
 
+    // MARK: Tab Flash
+
+    /// Shows a brief flash over the currently selected tab (or titlebar) to
+    /// provide lightweight visual feedback when jumping between windows/tabs.
+    func flashSelectedTab() {
+        guard let targetView = tabFlashTargetView() else { return }
+        TabFlashOverlayView.show(
+            on: targetView,
+            color: NSColor.controlAccentColor.withAlphaComponent(0.2)
+        )
+    }
+
+    private func tabFlashTargetView() -> NSView? {
+        guard let tabBar = findTabBar() else { return findTitlebarView() }
+
+        let tabButtons = tabBar.descendants(withClassName: "NSTabButton")
+
+        if let tabGroup = tabGroup,
+           let index = tabGroup.windows.firstIndex(of: self),
+           let button = tabButtons[safe: index] {
+            return button
+        }
+
+        if let selectedButton = tabButtons.compactMap({ $0 as? NSButton }).first(where: { $0.state == .on }) {
+            return selectedButton
+        }
+
+        return tabButtons.first ?? findTitlebarView()
+    }
+
     func isTabBar(_ childViewController: NSTitlebarAccessoryViewController) -> Bool {
         if childViewController.identifier == nil {
             // The good case
@@ -958,6 +988,46 @@ private final class TabColorPaletteView: NSView {
         for button in buttons {
             guard let color = TerminalWindow.TabColor(rawValue: button.tag) else { continue }
             button.image = color.swatchImage(selected: color == selectedColor)
+        }
+    }
+}
+
+private final class TabFlashOverlayView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.masksToBounds = true
+        isHidden = false
+        alphaValue = 0
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
+
+    static func show(on target: NSView, color: NSColor) {
+        let overlay = TabFlashOverlayView()
+        overlay.layer?.cornerRadius = max(target.layer?.cornerRadius ?? 6, 4)
+        overlay.layer?.backgroundColor = color.cgColor
+        overlay.frame = target.bounds
+        overlay.autoresizingMask = [.width, .height]
+        target.addSubview(overlay, positioned: .above, relativeTo: nil)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.08
+            overlay.animator().alphaValue = 1
+        } completionHandler: {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                overlay.animator().alphaValue = 0
+            } completionHandler: {
+                overlay.removeFromSuperview()
+            }
         }
     }
 }

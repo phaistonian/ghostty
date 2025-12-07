@@ -154,26 +154,91 @@ struct TerminalCommandPaletteView: View {
     }
 
     private var sessionSearchOptions: [CommandOption] {
-        TerminalController.all.compactMap { controller in
-            guard let window = controller.window else { return nil }
+        TerminalController.all.flatMap { controller in
+            guard let window = controller.window else { return [] as [CommandOption] }
 
-            let title = window.title.isEmpty ? "Untitled" : window.title
-            let directory = controller.focusedSurface?.pwd
-            let color = controller.tabColor == .none ? nil : controller.tabColor
+            let tabTitle = window.title.isEmpty ? "Untitled" : window.title
+            let tabColor = controller.tabColor == .none ? nil : controller.tabColor
+            let panes = Array(controller.surfaceTree)
+            let tabDirectory = controller.focusedSurface?.pwd ?? panes.first?.pwd
+            let tabDescription = tabDirectory.map { formattedPath($0) }
 
-            return CommandOption(
-                title: title,
-                description: directory.map(formattedPath),
-                leadingIcon: "rectangle.on.rectangle",
-                tabColor: color
-            ) {
-                NSApp.activate(ignoringOtherApps: true)
-                controller.window?.makeKeyAndOrderFront(nil)
-                if let surface = controller.focusedSurface {
-                    Ghostty.moveFocus(to: surface)
+            var options: [CommandOption] = []
+
+            options.append(
+                CommandOption(
+                    title: tabTitle,
+                    description: tabDescription,
+                    leadingIcon: "rectangle.on.rectangle",
+                    tabColor: tabColor
+                ) {
+                    if let surface = controller.focusedSurface ?? panes.first {
+                        controller.focusSurface(surface)
+                        surface.flashContentHighlight()
+                    } else {
+                        controller.window?.makeKeyAndOrderFront(nil)
+                        if !NSApp.isActive {
+                            NSApp.activate(ignoringOtherApps: true)
+                        }
+                    }
+                    controller.flashTabHighlight()
+                }
+            )
+
+            if panes.count > 1 {
+                for (index, surface) in panes.enumerated() {
+                    let isCurrentPane = surface === controller.focusedSurface
+                    let badge = "Pane \(index + 1)" + (isCurrentPane ? " (current)" : "")
+
+                    options.append(
+                        CommandOption(
+                            title: paneTitle(surface, fallback: tabTitle),
+                            description: paneDescription(surface, windowTitle: tabTitle),
+                            leadingIcon: "square.split.2x1",
+                            badge: badge,
+                            tabColor: tabColor
+                        ) {
+                            controller.focusSurface(surface)
+                            surface.flashContentHighlight()
+                            controller.flashTabHighlight()
+                        }
+                    )
                 }
             }
+
+            return options
         }
+    }
+
+    private func paneTitle(_ surface: Ghostty.SurfaceView, fallback: String) -> String {
+        let trimmed = surface.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+
+        if let path = surface.pwd, !path.isEmpty {
+            return formattedPath(path)
+        }
+
+        return fallback
+    }
+
+    private func paneDescription(
+        _ surface: Ghostty.SurfaceView,
+        windowTitle: String
+    ) -> String? {
+        var components: [String] = []
+
+        if let path = surface.pwd, !path.isEmpty {
+            components.append(formattedPath(path))
+        }
+
+        if !windowTitle.isEmpty {
+            components.append("Tab: \(windowTitle)")
+        }
+
+        guard !components.isEmpty else { return nil }
+        return components.joined(separator: ", ")
     }
 
     private func formattedPath(_ path: String) -> String {

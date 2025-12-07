@@ -65,6 +65,18 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         }
     }
 
+    /// Triggers a subtle flash on the associated tab to highlight it after actions
+    /// such as jumping via the session search palette.
+    func flashTabHighlight() {
+        // Give focus operations a moment to complete so the highlight animates
+        // on the correct tab/window.
+        let delay: DispatchTimeInterval = .milliseconds(80)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let window = self?.window as? TerminalWindow else { return }
+            window.flashSelectedTab()
+        }
+    }
+
     /// The notification cancellable for focused surface property changes.
     private var surfaceAppearanceCancellables: Set<AnyCancellable> = []
 
